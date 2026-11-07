@@ -48,6 +48,7 @@ const (
 	DefaultUserSessionIssuanceWindowSeconds = 24 * 60 * 60
 	DefaultUserSessionRevokedRetentionDays  = 7
 	DefaultUserSessionHourlyAlertThreshold  = 5000
+	DefaultUserSessionTTLHours              = 24
 )
 
 var (
@@ -56,6 +57,14 @@ var (
 	UserSessionIssuanceWindowSeconds = int64(DefaultUserSessionIssuanceWindowSeconds)
 	UserSessionRevokedRetentionDays  = DefaultUserSessionRevokedRetentionDays
 	UserSessionHourlyAlertThreshold  = DefaultUserSessionHourlyAlertThreshold
+	// UserSessionTTL is the absolute lifetime of a login session: the Refresh
+	// Cookie and the server-side session row expire together at this age.
+	UserSessionTTL = DefaultUserSessionTTLHours * time.Hour
+	// UserSessionCookieSessionOnly decides whether the Refresh Cookie survives
+	// a browser restart. When true the cookies carry no Max-Age/Expires, so
+	// closing the browser ends the login even though the server-side session
+	// row may still be within UserSessionTTL.
+	UserSessionCookieSessionOnly = true
 )
 
 var OptionMap map[string]string

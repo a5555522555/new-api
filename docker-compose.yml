@@ -48,6 +48,8 @@ services:
 #      - USER_SESSION_ISSUANCE_WINDOW_SECONDS=86400  # 不得大于 revoked 保留期 (must not exceed revoked retention)
 #      - USER_SESSION_REVOKED_RETENTION_DAYS=7
 #      - USER_SESSION_HOURLY_ALERT_THRESHOLD=5000  # 仅告警，不做全局拒绝 (alert only; never globally rejects login)
+#      - USER_SESSION_TTL_HOURS=24  # 登录会话绝对有效期（小时），默认 24 (absolute login session lifetime in hours, default 24)
+#      - USER_SESSION_COOKIE_SESSION_ONLY=true  # true：Refresh Cookie 为会话 Cookie，关闭浏览器即失效；false：按会话有效期持久化 (true: refresh cookie dies with the browser; false: persistent until session expiry)
 #      - SYNC_FREQUENCY=60  # Uncomment if regular database syncing is needed
 #      - GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX  # Google Analytics 的测量 ID (Google Analytics Measurement ID)
 #      - UMAMI_WEBSITE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  # Umami 网站 ID (Umami Website ID)

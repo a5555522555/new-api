@@ -119,7 +119,7 @@ func newLoginSession(userID int, authVersion int64, loginMethod, ip, userAgent s
 		UserAgent:       truncateAuthMetadata(userAgent, 512),
 		CreatedAt:       now,
 		LastActiveAt:    now,
-		ExpiresAt:       time.Unix(now, 0).Add(LoginSessionTTL).Unix(),
+		ExpiresAt:       time.Unix(now, 0).Add(common.UserSessionTTL).Unix(),
 	}
 	if session.LoginMethod == "" {
 		session.LoginMethod = "unknown"
@@ -322,24 +322,36 @@ func ListLoginSessions(userID int, currentSID string) ([]LoginSessionView, error
 	return views, nil
 }
 
+// WriteRefreshCookie writes the Refresh Cookie together with its session hint.
+// Under common.UserSessionCookieSessionOnly both cookies are session cookies:
+// they carry no Max-Age/Expires, so the browser drops them when it closes and
+// the next visit starts as an anonymous one even though the server-side session
+// row is still within common.UserSessionTTL. Setting USER_SESSION_COOKIE_SESSION_ONLY=false
+// restores a persistent cookie bounded by the session expiry.
 func WriteRefreshCookie(c *gin.Context, rawToken string) {
-	expiresAt := time.Now().Add(LoginSessionTTL)
+	expiresAt := time.Now().Add(common.UserSessionTTL)
 	if sid, _, ok := splitRefreshToken(rawToken); ok {
 		if session, err := model.GetUserSessionCached(sid); err == nil && session.ExpiresAt > time.Now().Unix() {
 			expiresAt = time.Unix(session.ExpiresAt, 0)
 		}
 	}
-	maxAge := max(int(time.Until(expiresAt)/time.Second), 1)
-	http.SetCookie(c.Writer, &http.Cookie{
+	maxAge := 0
+	if !common.UserSessionCookieSessionOnly {
+		maxAge = max(int(time.Until(expiresAt)/time.Second), 1)
+	}
+	cookie := &http.Cookie{
 		Name:     RefreshCookieName,
 		Value:    rawToken,
 		Path:     "/api/user/auth",
-		MaxAge:   maxAge,
-		Expires:  expiresAt,
 		HttpOnly: true,
 		Secure:   common.SessionCookieSecure,
 		SameSite: http.SameSiteStrictMode,
-	})
+	}
+	if maxAge > 0 {
+		cookie.MaxAge = maxAge
+		cookie.Expires = expiresAt
+	}
+	http.SetCookie(c.Writer, cookie)
 	writeSessionHintCookie(c, maxAge, expiresAt)
 }
 
@@ -374,17 +386,23 @@ func ClearRefreshCookie(c *gin.Context) {
 // why it lives inside these two helpers rather than at their call sites: both
 // cookies then ride the same response with the same expiry, and no login path
 // can set one without the other.
+//
+// A maxAge of 0 marks the browser-session mode: neither cookie is given a
+// lifetime, so the hint disappears exactly when the Refresh Cookie does.
 func writeSessionHintCookie(c *gin.Context, maxAge int, expiresAt time.Time) {
-	http.SetCookie(c.Writer, &http.Cookie{
+	cookie := &http.Cookie{
 		Name:     SessionHintCookieName,
 		Value:    SessionHintCookieValue,
 		Path:     "/",
-		MaxAge:   maxAge,
-		Expires:  expiresAt,
 		HttpOnly: false,
 		Secure:   common.SessionCookieSecure,
 		SameSite: http.SameSiteStrictMode,
-	})
+	}
+	if maxAge > 0 {
+		cookie.MaxAge = maxAge
+		cookie.Expires = expiresAt
+	}
+	http.SetCookie(c.Writer, cookie)
 }
 
 func clearSessionHintCookie(c *gin.Context) {

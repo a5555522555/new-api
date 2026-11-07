@@ -5,8 +5,9 @@
 ## 鉴权模型
 
 - Access Token 是有效期 15 分钟的 JWT，只保存在浏览器内存中，通过 `Authorization: Bearer <token>` 发送。
-- Refresh Token 是随机不透明值，有效期最长 30 天。浏览器只通过 `HttpOnly`、`SameSite=Strict` Cookie 持有它；服务端仅保存 HMAC 摘要，并在每次刷新时轮换。
-- `new_api_has_session` 是 Refresh Cookie 的会话提示，值恒为 `1`，`Path=/`、非 `HttpOnly`，与 Refresh Cookie 同时写入、同时清除、同一过期时间。它只声明"曾签发过 Refresh Cookie"，不含任何凭据，也不参与任何鉴权判定；伪造它唯一的效果是自费一次注定失败的 refresh。它存在的原因是 Refresh Cookie 被 `HttpOnly` 和 `Path=/api/user/auth` 双重限制，`/` 上的页面无法判断自己是否匿名，否则每次冷启动都要发一次注定 401 的 refresh，而该请求还会占用按 IP 计数的 `CriticalRateLimit` 配额。
+- Refresh Token 是随机不透明值，有效期最长 `USER_SESSION_TTL_HOURS`（默认 24 小时），是登录会话的绝对上限。浏览器只通过 `HttpOnly`、`SameSite=Strict` Cookie 持有它；服务端仅保存 HMAC 摘要，并在每次刷新时轮换。
+- 默认 `USER_SESSION_COOKIE_SESSION_ONLY=true`，Refresh Cookie 与 `new_api_has_session` 都不带 `Max-Age`/`Expires`，属于浏览器会话 Cookie：关闭浏览器后即被丢弃，下次访问按匿名处理，服务端即便还有未到期的 Session 行也不再可用。设为 `false` 可恢复持久 Cookie，寿命取会话的剩余有效期。浏览器“启动时恢复上次标签页”的功能可能保留会话 Cookie，需要严格保证退出时请同时使用退出登录。
+- `new_api_has_session` 是 Refresh Cookie 的会话提示，值恒为 `1`，`Path=/`、非 `HttpOnly`，与 Refresh Cookie 同时写入、同时清除、同一存活方式（同为会话 Cookie 或同一过期时间）。它只声明"曾签发过 Refresh Cookie"，不含任何凭据，也不参与任何鉴权判定；伪造它唯一的效果是自费一次注定失败的 refresh。它存在的原因是 Refresh Cookie 被 `HttpOnly` 和 `Path=/api/user/auth` 双重限制，`/` 上的页面无法判断自己是否匿名，否则每次冷启动都要发一次注定 401 的 refresh，而该请求还会占用按 IP 计数的 `CriticalRateLimit` 配额。
 - `user_sessions` 是登录会话控制面，记录设备、IP、登录方式、最后活跃时间、到期时间和撤销状态。数据库中的 Session 状态是最终权威；撤销传播速度取决于下文所述的 Redis 拓扑。
 - 用户的密码、状态、角色或安全因子发生安全相关变化时，`auth_version` 会递增并使旧登录会话失效。订阅带来的分组升降级只刷新授权缓存，不会退出任何登录设备。
 - Redis 缓存保存用户鉴权快照和登录会话快照。版本栅栏和撤销 tombstone 防止旧缓存重新授权；Session 快照使用跟随 `SYNC_FREQUENCY` 的短 TTL，缓存未命中或未启用 Redis 时回退到数据库校验。
@@ -82,6 +83,8 @@
 - 这两次计数与插入不加跨数据库锁；极端并发登录可能出现少量超额，但计数失败会拒绝签发，不会降级放行。
 
 升级时已经超过活跃上限的账户不会被自动下线或挤掉旧会话；限制只作用于后续的新 Session 签发。
+
+`USER_SESSION_TTL_HOURS`（默认 `24`）是登录 Session 的绝对有效期：`user_sessions.expires_at` 与 Refresh Cookie 的上限都由它决定。它不随刷新滑动续期，因此连续使用超过该时长的浏览器也会被要求重新登录。`USER_SESSION_COOKIE_SESSION_ONLY`（默认 `true`）决定 Cookie 是否随浏览器关闭而失效，关掉它只是让 Cookie 持久化，不会延长上面的绝对有效期。
 
 `USER_SESSION_REVOKED_RETENTION_DAYS`（默认 `7`）控制 revoked 行的审计保留期。签发计数依赖窗口内的行仍存在，因此签发窗口不得超过 revoked 保留期。如果配置超出，启动时会记录告警并将实际窗口钳制到保留期，避免提前删除 revoked 行导致限流计数被低估。
 
