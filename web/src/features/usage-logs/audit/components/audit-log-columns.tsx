@@ -170,16 +170,17 @@ export function useAuditLogColumns(
           />
         ),
         meta: { label: t('Result'), mobileBadge: true },
-      },
-      {
-        id: 'details',
-        header: t('Details'),
-        size: 70,
-        enableHiding: false,
-        cell: ({ row }) => <AuditLogDetailsDialog entry={row.original} />,
-        meta: { label: t('Details') },
       }
     )
+
+    columns.splice(1, 0, {
+      id: 'details',
+      header: t('Details'),
+      size: 70,
+      enableHiding: false,
+      cell: ({ row }) => <AuditLogDetailsDialog entry={row.original} />,
+      meta: { label: t('Details') },
+    })
     return columns
   }, [accessOnly, t])
 }

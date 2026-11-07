@@ -259,22 +259,23 @@ export function useTaskLogsColumns(
         ),
         size: 120,
         maxSize: 140,
-      },
-      {
-        accessorKey: 'fail_reason',
-        header: t('Details'),
-        cell: ({ row }) => (
-          <TaskDetailsCell
-            key={row.original.task_id}
-            log={row.original}
-            isAdmin={isAdmin}
-            isRoot={isRoot}
-          />
-        ),
-        size: 220,
-        maxSize: 240,
       }
     )
+
+    columns.splice(1, 0, {
+      accessorKey: 'fail_reason',
+      header: t('Details'),
+      cell: ({ row }) => (
+        <TaskDetailsCell
+          key={row.original.task_id}
+          log={row.original}
+          isAdmin={isAdmin}
+          isRoot={isRoot}
+        />
+      ),
+      size: 220,
+      maxSize: 240,
+    })
 
     return columns
   }, [t, isAdmin, isRoot])
